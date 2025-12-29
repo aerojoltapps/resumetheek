@@ -21,7 +21,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center">
               <Link to="/" className="text-2xl font-black text-blue-600 tracking-tighter">
-                JobDoc<span className="text-gray-900">Pro</span>
+                Resume<span className="text-gray-900">Theek</span>
               </Link>
             </div>
             <div className="hidden lg:flex space-x-8 text-sm font-bold items-center">
@@ -58,7 +58,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
             <div className="col-span-1 md:col-span-2">
-              <h3 className="text-2xl font-black mb-6 tracking-tighter">JobDocPro</h3>
+              <h3 className="text-2xl font-black mb-6 tracking-tighter">ResumeTheek</h3>
               <p className="text-gray-400 max-w-sm leading-relaxed mb-6">
                 Helping Indian job seekers land their dream roles with recruiter-ready documents. 
                 Focus on Tier 2/3 cities and freshers. No AI skills required.
@@ -99,7 +99,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-16 pt-8 text-center text-gray-500 text-xs font-medium uppercase tracking-[2px]">
-            © 2024 JobDocPro. Crafted with passion for India.
+            © 2024 ResumeTheek. Crafted with passion for India.
           </div>
         </div>
       </footer>

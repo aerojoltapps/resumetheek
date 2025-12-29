@@ -100,7 +100,7 @@ const Home = () => {
         <section className="bg-gray-50 py-24">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-              <h2 className="text-4xl font-black mb-4 tracking-tight">JobDocPro vs. Free AI Tools</h2>
+              <h2 className="text-4xl font-black mb-4 tracking-tight">ResumeTheek vs. Free AI Tools</h2>
               <p className="text-gray-500 font-medium">Why we are the preferred resume writing service in India.</p>
             </div>
             <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -114,7 +114,7 @@ const Home = () => {
                   </ul>
                </div>
                <div className="bg-blue-600 p-10 rounded-[2.5rem] text-white shadow-xl">
-                  <h3 className="text-xl font-bold mb-6">JobDocPro</h3>
+                  <h3 className="text-xl font-bold mb-6">ResumeTheek</h3>
                   <ul className="space-y-4 text-sm font-bold">
                     <li>✅ Recruiter-Approved Layouts</li>
                     <li>✅ Indian Job Market Keywords</li>
@@ -231,7 +231,7 @@ const Builder = () => {
       key: RAZORPAY_KEY_ID,
       amount: PRICING[selectedPackage].price * 100,
       currency: "INR",
-      name: "JobDocPro",
+      name: "ResumeTheek",
       description: `Unlock Full Documents - ${PRICING[selectedPackage].label}`,
       handler: async function(response: any) {
         if (response.razorpay_payment_id) {

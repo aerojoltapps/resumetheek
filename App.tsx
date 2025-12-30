@@ -231,7 +231,7 @@ const Builder = () => {
       handler: async function(response: any) {
         if (response.razorpay_payment_id) {
           try {
-            const sync = await fetch('/api/verify', {
+            const syncResponse = await fetch('/api/verify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -243,15 +243,20 @@ const Builder = () => {
               })
             });
             
-            const verifyResult = await sync.json();
+            let verifyResult;
+            try {
+              verifyResult = await syncResponse.json();
+            } catch (jsonErr) {
+              verifyResult = { error: "Invalid server response. Please contact support." };
+            }
             
-            if (sync.ok) {
+            if (syncResponse.ok) {
               handlePaymentSuccess();
             } else {
-              alert(verifyResult.error || "Security check failed. Please contact support.");
+              alert(verifyResult.error || "Payment verification failed. Please try refreshing.");
             }
           } catch (e) {
-            alert("Verification connection failed. Please check your internet.");
+            alert("Connection error during verification. Check your internet.");
           }
         }
       },

@@ -132,7 +132,36 @@ const Home = () => {
 
 const Builder = () => {
   const [searchParams] = useSearchParams();
-  const [selectedPackage, setSelectedPackage] = useState<PackageType | null>(searchParams.get('package') as PackageType | null);
+  
+  // Storage Keys
+  const ID_KEY = btoa('rt_v1_paid_ids');
+  const CREDITS_KEY = btoa('rt_v1_credits_log');
+
+  const getIdentifier = (email: string, phone: string) => `${email.toLowerCase().trim()}_${phone.trim()}`;
+
+  // Initial Selected Package Logic:
+  // If no package in URL, check if we have a paid draft in local storage to bypass pricing
+  const [selectedPackage, setSelectedPackage] = useState<PackageType | null>(() => {
+    const pkgParam = searchParams.get('package') as PackageType | null;
+    if (pkgParam) return pkgParam;
+
+    try {
+      const draftStr = localStorage.getItem('rt_draft');
+      const paidIdsStr = localStorage.getItem(ID_KEY);
+      if (draftStr && paidIdsStr) {
+        const draft = JSON.parse(draftStr);
+        const paidIds = JSON.parse(paidIdsStr);
+        if (draft.email && draft.phone) {
+          const id = `${draft.email.toLowerCase().trim()}_${draft.phone.trim()}`;
+          if (paidIds.includes(id)) {
+            return PackageType.JOB_READY_PACK; // Bypass to form for returning paid users
+          }
+        }
+      }
+    } catch (e) {}
+    return null;
+  });
+
   const [userData, setUserData] = useState<UserData | null>(() => {
     const saved = localStorage.getItem('rt_draft');
     const initialRole = searchParams.get('role');
@@ -149,12 +178,6 @@ const Builder = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCheckout, setIsCheckout] = useState(false);
 
-  // Storage Keys
-  const ID_KEY = btoa('rt_v1_paid_ids');
-  const CREDITS_KEY = btoa('rt_v1_credits_log');
-
-  const getIdentifier = (email: string, phone: string) => `${email.toLowerCase().trim()}_${phone.trim()}`;
-  
   const [paidIdentifiers, setPaidIdentifiers] = useState<string[]>(() => 
     JSON.parse(localStorage.getItem(ID_KEY) || '[]')
   );

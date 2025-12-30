@@ -1,7 +1,7 @@
 
 import { kv } from "@vercel/kv";
 
-// Switching to nodejs runtime for more robust outbound networking in some regions
+// Switching to nodejs runtime for more robust outbound networking
 export const config = {
   runtime: 'nodejs',
 };
@@ -52,7 +52,6 @@ async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: 
     const kid = cleanKey(keyId);
     const ksec = cleanKey(keySecret);
     
-    // Using standard Basic Auth encoding
     const auth = btoa(`${kid}:${ksec}`);
     
     const response = await fetch(`https://api.razorpay.com/v1/payments/${pid}`, {
@@ -73,8 +72,6 @@ async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: 
     }
 
     const data = await response.json();
-    
-    // Status 'authorized' is common before 'captured' in many payment flows
     const isValid = data.status === 'captured' || data.status === 'authorized';
     
     return { 
@@ -90,7 +87,6 @@ async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: 
 }
 
 export default async function handler(req: any, res: any) {
-  // Add security headers to the response
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -116,13 +112,11 @@ export default async function handler(req: any, res: any) {
     let isVerified = false;
     let verificationError = '';
 
-    // 1. Try HMAC Signature verification if pieces are present
     if (orderId && signature) {
       isVerified = await verifyRazorpaySignature(orderId, paymentId, signature, cleanKey(keySecret));
       if (!isVerified) verificationError = 'Signature verification mismatch.';
     } 
     
-    // 2. Fallback: Verify via direct Razorpay API call
     if (!isVerified) {
       const apiCheck = await verifyPaymentStatus(paymentId, keyId, keySecret);
       isVerified = apiCheck.verified;
@@ -136,8 +130,6 @@ export default async function handler(req: any, res: any) {
     }
 
     const secureId = await hashIdentifier(identifier);
-    
-    // Grant credits (3 attempts)
     await kv.set(`paid_v2_${secureId}`, {
       verifiedAt: new Date().toISOString(),
       credits: 3,

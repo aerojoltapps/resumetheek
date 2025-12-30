@@ -1,3 +1,4 @@
+
 import { kv } from "@vercel/kv";
 
 export const config = {
@@ -48,6 +49,24 @@ async function verifyRazorpaySignature(orderId: string, paymentId: string, signa
   return digest === signature;
 }
 
+/**
+ * Fallback: Verify payment by fetching status directly from Razorpay API
+ */
+async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: string): Promise<boolean> {
+  const auth = btoa(`${keyId}:${keySecret}`);
+  try {
+    const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      headers: { 'Authorization': `Basic ${auth}` }
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    // Payment is valid if it is captured or authorized (awaiting capture)
+    return data.status === 'captured' || data.status === 'authorized';
+  } catch (e) {
+    return false;
+  }
+}
+
 export default async function handler(req: Request) {
   const securityHeaders = {
     'Content-Type': 'application/json',
@@ -58,24 +77,40 @@ export default async function handler(req: Request) {
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
   if (!checkOrigin(req)) return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: securityHeaders });
 
+  const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keySecret) return new Response(JSON.stringify({ error: 'Gateway configuration error' }), { status: 500, headers: securityHeaders });
+
+  if (!keySecret || !keyId) {
+    return new Response(JSON.stringify({ error: 'Gateway configuration missing' }), { status: 500, headers: securityHeaders });
+  }
 
   try {
     const payload = await req.json();
     const { identifier, paymentId, orderId, signature, packageType } = payload;
     
-    if (!identifier || !paymentId || !orderId || !signature) {
-      return new Response(JSON.stringify({ error: 'Incomplete data' }), { status: 400, headers: securityHeaders });
+    if (!identifier || !paymentId) {
+      return new Response(JSON.stringify({ error: 'Missing payment identifier' }), { status: 400, headers: securityHeaders });
     }
 
-    const isValid = await verifyRazorpaySignature(orderId, paymentId, signature, keySecret);
-    if (!isValid) {
+    let isVerified = false;
+
+    // 1. Try HMAC Signature verification if all pieces are present
+    if (orderId && signature) {
+      isVerified = await verifyRazorpaySignature(orderId, paymentId, signature, keySecret);
+    } 
+    
+    // 2. Fallback: Verify via Razorpay API (Necessary for Simple Checkout/Test Mode without Orders)
+    if (!isVerified) {
+      isVerified = await verifyPaymentStatus(paymentId, keyId, keySecret);
+    }
+
+    if (!isVerified) {
       return new Response(JSON.stringify({ error: 'Security verification failed' }), { status: 403, headers: securityHeaders });
     }
 
     const secureId = await hashIdentifier(identifier);
     
+    // Set credits (3 attempts as per the Package requirements)
     await kv.set(`paid_v2_${secureId}`, {
       verifiedAt: new Date().toISOString(),
       credits: 3,

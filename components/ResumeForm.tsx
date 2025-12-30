@@ -1,14 +1,16 @@
+
 import React, { useState } from 'react';
 import { JobRole, UserData } from '../types';
 
 interface Props {
-  onSubmit: (data: UserData) => void;
+  onSubmit: (data: UserData & { botCheck?: string }) => void;
   isLoading: boolean;
   initialData?: UserData | null;
 }
 
 const ResumeForm: React.FC<Props> = ({ onSubmit, isLoading, initialData }) => {
   const [step, setStep] = useState(1);
+  const [botCheck, setBotCheck] = useState(''); // Honeypot field
   const [formData, setFormData] = useState<UserData>(initialData || {
     fullName: '',
     email: '',
@@ -81,8 +83,9 @@ const ResumeForm: React.FC<Props> = ({ onSubmit, isLoading, initialData }) => {
     if (!validateStep(step)) return;
 
     // Clean data before submission
-    const cleanData: UserData = {
+    const cleanData: UserData & { botCheck?: string } = {
       ...formData,
+      botCheck: botCheck, // Include honeypot value
       education: formData.education.filter(e => e.degree.trim() || e.college.trim()),
       experience: formData.experience.filter(e => e.title.trim() || e.company.trim()),
       skills: formData.skills.filter(s => s.trim())
@@ -93,6 +96,18 @@ const ResumeForm: React.FC<Props> = ({ onSubmit, isLoading, initialData }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+      {/* Honeypot field - Hidden from users */}
+      <div style={{ display: 'none' }} aria-hidden="true">
+        <input 
+          type="text" 
+          name="botCheck" 
+          value={botCheck} 
+          onChange={(e) => setBotCheck(e.target.value)} 
+          tabIndex={-1} 
+          autoComplete="off"
+        />
+      </div>
+
       {/* Privacy Badge */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mb-8 bg-green-50 py-3 px-6 rounded-2xl w-full border border-green-100">
         <div className="flex items-center gap-2">

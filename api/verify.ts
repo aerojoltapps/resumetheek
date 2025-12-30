@@ -5,47 +5,82 @@ export const config = {
   runtime: 'edge',
 };
 
-export default async function handler(req: Request) {
-  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+const ALLOWED_ORIGIN = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+const HASH_SALT = process.env.HASH_SALT || "rt_default_salt_2024";
 
-  // Check for KV environment variables
-  const hasKV = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
-  const hasOnlyRedis = process.env.REDIS_URL && !hasKV;
+async function hashIdentifier(id: string): Promise<string> {
+  const normalized = id.toLowerCase().trim();
+  const msgBuffer = new TextEncoder().encode(normalized + HASH_SALT);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-  if (!hasKV) {
-    const errorMsg = hasOnlyRedis 
-      ? 'Error: You linked a "Redis" database instead of a "KV" database. Please go to Vercel Storage, create a "KV" database, and connect it to this project.'
-      : 'Error: Vercel KV is not configured. Please go to the Storage tab in Vercel and create/link a KV database.';
-    
-    return new Response(JSON.stringify({ error: errorMsg }), { 
-      status: 500, 
-      headers: { 'Content-Type': 'application/json' } 
-    });
+function checkOrigin(req: Request) {
+  const origin = req.headers.get('origin');
+  const referer = req.headers.get('referer');
+  if (process.env.NODE_ENV === 'production' && ALLOWED_ORIGIN) {
+    if (origin && origin !== ALLOWED_ORIGIN) return false;
+    if (referer && !referer.startsWith(ALLOWED_ORIGIN)) return false;
   }
+  return true;
+}
+
+async function verifyRazorpaySignature(orderId: string, paymentId: string, signature: string, secret: string): Promise<boolean> {
+  const text = orderId + "|" + paymentId;
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signatureData = encoder.encode(text);
+  const hmac = await crypto.subtle.sign("HMAC", key, signatureData);
+  const digest = Array.from(new Uint8Array(hmac))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+  return digest === signature;
+}
+
+export default async function handler(req: Request) {
+  const securityHeaders = {
+    'Content-Type': 'application/json',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY'
+  };
+
+  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+  if (!checkOrigin(req)) return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: securityHeaders });
+
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keySecret) return new Response(JSON.stringify({ error: 'Gateway configuration error' }), { status: 500, headers: securityHeaders });
 
   try {
-    const { identifier, paymentId, packageType } = await req.json();
+    const payload = await req.json();
+    const { identifier, paymentId, orderId, signature, packageType } = payload;
     
-    if (!identifier || !paymentId) {
-      return new Response(JSON.stringify({ error: 'Invalid payment data' }), { status: 400 });
+    if (!identifier || !paymentId || !orderId || !signature) {
+      return new Response(JSON.stringify({ error: 'Incomplete data' }), { status: 400, headers: securityHeaders });
     }
 
-    // Store the payment record in Vercel KV
-    await kv.set(`paid_${identifier}`, {
-      paymentId,
-      packageType,
+    const isValid = await verifyRazorpaySignature(orderId, paymentId, signature, keySecret);
+    if (!isValid) {
+      return new Response(JSON.stringify({ error: 'Security verification failed' }), { status: 403, headers: securityHeaders });
+    }
+
+    const secureId = await hashIdentifier(identifier);
+    
+    await kv.set(`paid_v2_${secureId}`, {
       verifiedAt: new Date().toISOString(),
-      credits: 3 
+      credits: 3,
+      packageType
     });
 
-    return new Response(JSON.stringify({ success: true }), { 
-      status: 200, 
-      headers: { 'Content-Type': 'application/json' } 
-    });
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: securityHeaders });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Failed to verify payment" }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(JSON.stringify({ error: "Internal verification error" }), { status: 500, headers: securityHeaders });
   }
 }

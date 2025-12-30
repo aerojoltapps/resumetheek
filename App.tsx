@@ -1,4 +1,3 @@
-
 import { UserData, DocumentResult, PackageType, JobRole } from './types';
 import { generateJobDocuments } from './services/geminiService';
 import { PRICING, RAZORPAY_KEY_ID } from './constants';
@@ -66,7 +65,7 @@ const Home = () => {
               Best Professional Resume Service in India
             </span>
             <h1 className="text-5xl md:text-7xl font-black text-gray-900 leading-[1.05] tracking-tight mb-8">
-              Get a job-ready ATS-friendly resume <br className="hidden md:block" /> 
+            Get a job-ready ATS-friendly resume <br className="hidden md:block" /> 
               <span className="text-blue-600">with AI in 15 minutes.</span>
             </h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-6 font-semibold leading-relaxed">
@@ -203,9 +202,7 @@ const Builder = () => {
       
       if (lowerError.includes('payment required') || 
           lowerError.includes('complete your purchase') || 
-          lowerError.includes('verification failed') ||
-          lowerError.includes('"payment required"') ||
-          lowerError.includes('purchase required')) {
+          lowerError.includes('402')) {
         setIsCheckout(true);
       } else {
         alert(errorMsg);
@@ -237,12 +234,16 @@ const Builder = () => {
             body: JSON.stringify({
               identifier: currentId,
               paymentId: response.razorpay_payment_id,
+              orderId: response.razorpay_order_id,
+              signature: response.razorpay_signature,
               packageType: selectedPackage
             })
           });
           
           if (sync.ok) {
             handlePaymentSuccess();
+          } else {
+            alert("Security check failed. Please contact support.");
           }
         }
       },
@@ -363,6 +364,11 @@ const Builder = () => {
               </button>
             </div>
             <div className="text-center mb-16">
+              {selectedPackage && (
+                <div className="inline-block bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-6 border border-blue-100 animate-fadeIn">
+                  Selected Plan: {PRICING[selectedPackage].label}
+                </div>
+              )}
               <h1 className="text-4xl font-black tracking-tight">Career Details</h1>
               <p className="text-gray-500 mt-2 font-medium">Your data is processed on our secure Vercel server.</p>
             </div>

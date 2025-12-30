@@ -4,6 +4,7 @@ import { generateJobDocuments } from './services/geminiService';
 import { PRICING, RAZORPAY_KEY_ID } from './constants';
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Layout from './components/Layout';
 import ResumeForm from './components/ResumeForm';
 import DocumentPreview from './components/DocumentPreview';
@@ -540,6 +541,7 @@ const App: React.FC = () => (
       <Route path="/terms" element={<TermsAndConditions />} />
       <Route path="/refunds" element={<RefundPolicy />} />
     </Routes>
+    <Analytics />
   </Router>
 );
 

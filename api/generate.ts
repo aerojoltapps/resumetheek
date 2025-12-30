@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { kv } from "@vercel/kv";
 
@@ -124,7 +123,7 @@ Generate job application documents for the following profile.
 Name: ${safeFullName}
 Target: ${safeJobRole}
 Location: ${sanitizeForPrompt(userData.location)}
-Skills: ${JSON.stringify(userData.skills.map(s => sanitizeForPrompt(s)))}
+Skills: ${JSON.stringify(userData.skills.map((s: string) => sanitizeForPrompt(s)))}
 Experience: ${JSON.stringify(userData.experience)}
 Education: ${JSON.stringify(userData.education)}
 [USER_PROFILE_END]

@@ -6,7 +6,6 @@ export const config = {
 };
 
 const MAX_PAYLOAD_SIZE = 50000; // 50KB limit for safety
-const ALLOWED_ORIGIN = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
 const HASH_SALT = process.env.HASH_SALT || "rt_default_salt_2024";
 
 async function hashIdentifier(id: string): Promise<string> {
@@ -19,15 +18,21 @@ async function hashIdentifier(id: string): Promise<string> {
 }
 
 /**
- * Validates that the request origin is authorized.
+ * Validates that the request origin matches the host.
  */
 function checkOrigin(req: Request) {
   const origin = req.headers.get('origin');
-  const referer = req.headers.get('referer');
+  const host = req.headers.get('host');
   
-  if (process.env.NODE_ENV === 'production' && ALLOWED_ORIGIN) {
-    if (origin && origin !== ALLOWED_ORIGIN) return false;
-    if (referer && !referer.startsWith(ALLOWED_ORIGIN)) return false;
+  // In production, ensure the request is actually coming from our own domain.
+  // Comparing the Origin host to the Host header handles custom domains and deployment URLs.
+  if (process.env.NODE_ENV === 'production' && origin && host) {
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== host) return false;
+    } catch (e) {
+      return false;
+    }
   }
   return true;
 }

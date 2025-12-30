@@ -1,11 +1,9 @@
-
 import { kv } from "@vercel/kv";
 
 export const config = {
   runtime: 'edge',
 };
 
-const ALLOWED_ORIGIN = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
 const HASH_SALT = process.env.HASH_SALT || "rt_default_salt_2024";
 
 async function hashIdentifier(id: string): Promise<string> {
@@ -18,10 +16,15 @@ async function hashIdentifier(id: string): Promise<string> {
 
 function checkOrigin(req: Request) {
   const origin = req.headers.get('origin');
-  const referer = req.headers.get('referer');
-  if (process.env.NODE_ENV === 'production' && ALLOWED_ORIGIN) {
-    if (origin && origin !== ALLOWED_ORIGIN) return false;
-    if (referer && !referer.startsWith(ALLOWED_ORIGIN)) return false;
+  const host = req.headers.get('host');
+  
+  if (process.env.NODE_ENV === 'production' && origin && host) {
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== host) return false;
+    } catch (e) {
+      return false;
+    }
   }
   return true;
 }

@@ -66,8 +66,8 @@ const Home = () => {
               Best Professional Resume Service in India
             </span>
             <h1 className="text-5xl md:text-7xl font-black text-gray-900 leading-[1.05] tracking-tight mb-8">
-              Get a job-ready resume <br className="hidden md:block" /> 
-              <span className="text-blue-600">in 15 minutes.</span>
+              Get a job-ready ATS-friendly resume <br className="hidden md:block" /> 
+              <span className="text-blue-600">with AI in 15 minutes.</span>
             </h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-6 font-semibold leading-relaxed">
               We provide ATS-friendly resume writing services in India for freshers and experienced professionals. 

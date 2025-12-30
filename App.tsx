@@ -205,12 +205,13 @@ const Builder = () => {
     localStorage.setItem(CREDITS_KEY, JSON.stringify(creditsMap));
   }, [creditsMap]);
 
-  const onFormSubmit = async (data: UserData) => {
+  const onFormSubmit = async (data: UserData, isVerifiedPayment = false) => {
     const id = getIdentifier(data.email, data.phone);
     setUserData(data);
 
     // If they changed package type in UI but haven't paid for it specifically, trigger checkout
-    if (paidPackages[id] !== selectedPackage) {
+    // Unless this call is coming directly from a successful payment flow (isVerifiedPayment)
+    if (!isVerifiedPayment && paidPackages[id] !== selectedPackage) {
       setIsCheckout(true);
       return;
     }
@@ -308,10 +309,15 @@ const Builder = () => {
   const handlePaymentSuccess = (pkg: PackageType) => {
     if (userData) {
       const id = getIdentifier(userData.email, userData.phone);
+      // Close modal first
+      setIsCheckout(false);
+      
+      // Update states
       setPaidPackages(prev => ({ ...prev, [id]: pkg }));
       setCreditsMap(prev => ({ ...prev, [id]: 3 }));
-      setIsCheckout(false);
-      onFormSubmit(userData);
+      
+      // Submit with verified flag to bypass stale state check
+      onFormSubmit(userData, true);
       window.scrollTo(0, 0);
     }
   };

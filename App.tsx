@@ -134,7 +134,7 @@ const Builder = () => {
   const [searchParams] = useSearchParams();
   const [selectedPackage, setSelectedPackage] = useState<PackageType | null>(searchParams.get('package') as PackageType | null);
   const [userData, setUserData] = useState<UserData | null>(() => {
-    const saved = localStorage.getItem('jdp_draft');
+    const saved = localStorage.getItem('rt_draft');
     const initialRole = searchParams.get('role');
     
     if (saved) {
@@ -150,8 +150,8 @@ const Builder = () => {
   const [isCheckout, setIsCheckout] = useState(false);
 
   // Storage Keys
-  const ID_KEY = btoa('jdp_v1_paid_ids');
-  const CREDITS_KEY = btoa('jdp_v1_credits_log');
+  const ID_KEY = btoa('rt_v1_paid_ids');
+  const CREDITS_KEY = btoa('rt_v1_credits_log');
 
   const getIdentifier = (email: string, phone: string) => `${email.toLowerCase().trim()}_${phone.trim()}`;
   
@@ -167,7 +167,7 @@ const Builder = () => {
   const remainingCredits = creditsMap[currentId] !== undefined ? creditsMap[currentId] : 0;
 
   useEffect(() => {
-    if (userData) localStorage.setItem('jdp_draft', JSON.stringify(userData));
+    if (userData) localStorage.setItem('rt_draft', JSON.stringify(userData));
   }, [userData]);
 
   useEffect(() => {
@@ -188,7 +188,6 @@ const Builder = () => {
       const generated = await generateJobDocuments(data, id);
       setResult(generated);
       
-      // Update state from server response (Syncs Paid status and Credits)
       setPaidIdentifiers(prev => prev.includes(id) ? prev : [...prev, id]);
       if (generated.remainingCredits !== undefined) {
         setCreditsMap(prev => ({
@@ -199,11 +198,9 @@ const Builder = () => {
       
       window.scrollTo(0, 0);
     } catch (e: any) {
-      // Stringify error if it's an object to ensure keyword matching works on JSON strings too
       const errorMsg = typeof e === 'string' ? e : (e.message || JSON.stringify(e));
       const lowerError = errorMsg.toLowerCase();
       
-      // Broadened matching for payment related triggers
       if (lowerError.includes('payment required') || 
           lowerError.includes('complete your purchase') || 
           lowerError.includes('verification failed') ||
@@ -235,7 +232,6 @@ const Builder = () => {
       description: `Unlock Full Documents - ${PRICING[selectedPackage].label}`,
       handler: async function(response: any) {
         if (response.razorpay_payment_id) {
-          // SECURE: Sync payment success with Vercel KV
           const sync = await fetch('/api/verify', {
             method: 'POST',
             body: JSON.stringify({
@@ -268,7 +264,6 @@ const Builder = () => {
       setPaidIdentifiers(prev => prev.includes(id) ? prev : [...prev, id]);
       setCreditsMap(prev => ({ ...prev, [id]: 3 }));
       setIsCheckout(false);
-      // Restart the generation process automatically
       onFormSubmit(userData);
       window.scrollTo(0, 0);
     }
@@ -281,7 +276,6 @@ const Builder = () => {
       const refined = await generateJobDocuments(userData, currentId, feedback);
       setResult(refined);
       
-      // Update credits from server response
       if (refined.remainingCredits !== undefined) {
         setCreditsMap(prev => ({
           ...prev,
@@ -426,6 +420,57 @@ const FAQ = () => (
   </Layout>
 );
 
+const TermsAndConditions = () => (
+  <Layout>
+    <div className="max-w-3xl mx-auto py-24 px-4 prose prose-blue">
+      <h1 className="text-4xl font-black mb-8">Terms and Conditions</h1>
+      <div className="space-y-6 text-gray-700 font-medium">
+        <p>Welcome to ResumeTheek. By using our service, you agree to the following terms:</p>
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">1. Service Description</h2>
+          <p>ResumeTheek provides an AI-assisted resume and job document generation service. The results are based on the data provided by the user.</p>
+        </section>
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">2. User Responsibility</h2>
+          <p>Users are responsible for the accuracy of the information provided. While our AI aims for high quality, users should review and verify all generated content before use in professional applications.</p>
+        </section>
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">3. Payments</h2>
+          <p>Payments are processed securely via Razorpay. Access to premium features is granted upon successful payment confirmation.</p>
+        </section>
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">4. Data Storage</h2>
+          <p>We prioritize privacy. Draft data is stored locally in your browser. Verification records are stored securely in our cloud database for quota management.</p>
+        </section>
+      </div>
+    </div>
+  </Layout>
+);
+
+const RefundPolicy = () => (
+  <Layout>
+    <div className="max-w-3xl mx-auto py-24 px-4">
+      <h1 className="text-4xl font-black mb-8 text-center">Cancellations and Refunds</h1>
+      <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-xl space-y-6">
+        <p className="text-gray-700 font-medium text-lg leading-relaxed">
+          At ResumeTheek, we strive for perfection. Due to the digital nature of our service (instant AI generation), we typically follow a <strong>no cancellation and no refund policy</strong> once a payment is made and processing has begun.
+        </p>
+        <div className="p-6 bg-blue-50 border border-blue-100 rounded-2xl">
+          <h3 className="font-black text-blue-900 mb-2">Not satisfied with the result?</h3>
+          <p className="text-blue-700 font-medium">
+            If you are genuinely unhappy with the documents generated, please reach out to us. We handle exceptional cases on a one-to-one basis.
+          </p>
+        </div>
+        <p className="text-gray-600 font-medium">
+          For any concerns or feedback, please email us at: <br />
+          <a href="mailto:aerojoltapps@gmail.com" className="text-blue-600 font-black underline">aerojoltapps@gmail.com</a>
+        </p>
+        <p className="text-sm text-gray-400">Please include your registered email and phone number in your request.</p>
+      </div>
+    </div>
+  </Layout>
+);
+
 const App: React.FC = () => (
   <Router>
     <Routes>
@@ -434,6 +479,8 @@ const App: React.FC = () => (
       <Route path="/samples" element={<Gallery />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/faq" element={<FAQ />} />
+      <Route path="/terms" element={<TermsAndConditions />} />
+      <Route path="/refunds" element={<RefundPolicy />} />
     </Routes>
   </Router>
 );

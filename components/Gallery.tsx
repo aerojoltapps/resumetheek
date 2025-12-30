@@ -138,7 +138,7 @@ const Gallery: React.FC = () => {
       <div className="mt-24 bg-blue-600 rounded-[3rem] p-16 text-center text-white relative overflow-hidden shadow-2xl">
         <div className="relative z-10">
           <h2 className="text-4xl font-black mb-6 tracking-tight">Need Fresher Resume Help?</h2>
-          <p className="mb-10 text-blue-100 max-w-2xl mx-auto text-lg font-medium">Join 1000+ Indians who used ResumeTheek to land interviews at top companies. Our ATS friendly resume writing service India is here to help you grow.</p>
+          <p className="mb-10 text-blue-100 max-w-2xl mx-auto text-lg font-medium">Join 1000+ Indians who used JobDocPro to land interviews at top companies. Our ATS friendly resume writing service India is here to help you grow.</p>
           <Link to="/builder" className="bg-white text-blue-600 px-12 py-5 rounded-2xl font-black text-xl hover:bg-gray-100 transition shadow-2xl inline-block transform hover:scale-105 active:scale-95">
             Start Building Now
           </Link>

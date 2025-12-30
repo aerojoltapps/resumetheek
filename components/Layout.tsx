@@ -1,5 +1,6 @@
-import React from 'react';
+
 import { Link, useLocation } from 'react-router-dom';
+import React from 'react';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -86,14 +87,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               </ul>
             </div>
             <div>
-              <h4 className="font-bold text-white mb-6 uppercase tracking-widest text-xs">Support</h4>
+              <h4 className="font-bold text-white mb-6 uppercase tracking-widest text-xs">Legal & Support</h4>
+              <ul className="space-y-4 text-gray-400 text-sm font-medium mb-6">
+                <li><Link to="/terms" className="hover:text-white transition">Terms & Conditions</Link></li>
+                <li><Link to="/refunds" className="hover:text-white transition">Refunds Policy</Link></li>
+              </ul>
               <div className="space-y-4">
                 <p className="text-gray-400 text-sm flex items-center gap-2">
                   <span className="text-blue-400 font-bold">Email:</span> aerojoltapps@gmail.com
                 </p>
                 <div className="pt-4 flex gap-4 opacity-50">
                   <span className="text-xs font-bold border border-gray-700 px-2 py-1 rounded">SSL SECURED</span>
-                  <span className="text-xs font-bold border border-gray-700 px-2 py-1 rounded">CLIENT-ONLY STORAGE</span>
+                  <span className="text-xs font-bold border border-gray-700 px-2 py-1 rounded">CLIENT-ONLY</span>
                 </div>
               </div>
             </div>

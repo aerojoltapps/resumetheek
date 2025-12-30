@@ -57,7 +57,7 @@ export default async function handler(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
     
-    const systemInstruction = `You are an expert Indian Recruiter and Resume Writer. 
+    const systemInstruction = `You are an expert Indian Recruiter and Resume Writer working for ResumeTheek. 
     Your task is to convert raw user data into high-impact, professional, ATS-friendly job application documents.
     Always use Indian English and industry-standard terminology for the Indian market (e.g., Lakhs, CGPA, etc.).`;
 

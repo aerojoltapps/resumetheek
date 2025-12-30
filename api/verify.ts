@@ -1,11 +1,20 @@
 
 import { kv } from "@vercel/kv";
 
+// Switching to nodejs runtime for more robust outbound networking in some regions
 export const config = {
-  runtime: 'edge',
+  runtime: 'nodejs',
 };
 
 const HASH_SALT = process.env.HASH_SALT || "rt_default_salt_2024";
+
+/**
+ * Sanitizes keys by removing whitespace and potential surrounding quotes
+ */
+const cleanKey = (key: string | undefined) => {
+  if (!key) return "";
+  return key.trim().replace(/^["'](.+)["']$/, '$1');
+};
 
 async function hashIdentifier(id: string): Promise<string> {
   const normalized = id.toLowerCase().trim();
@@ -18,7 +27,7 @@ async function hashIdentifier(id: string): Promise<string> {
 async function verifyRazorpaySignature(orderId: string, paymentId: string, signature: string, secret: string): Promise<boolean> {
   const text = orderId.trim() + "|" + paymentId.trim();
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret.trim());
+  const keyData = encoder.encode(secret);
   const key = await crypto.subtle.importKey(
     "raw",
     keyData,
@@ -40,75 +49,80 @@ async function verifyRazorpaySignature(orderId: string, paymentId: string, signa
 async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: string): Promise<{verified: boolean, error?: string}> {
   try {
     const pid = paymentId.trim();
-    const kid = keyId.trim();
-    const ksec = keySecret.trim();
+    const kid = cleanKey(keyId);
+    const ksec = cleanKey(keySecret);
     
-    const auth = btoa(kid + ":" + ksec);
+    // Using standard Basic Auth encoding
+    const auth = btoa(`${kid}:${ksec}`);
     
     const response = await fetch(`https://api.razorpay.com/v1/payments/${pid}`, {
       method: 'GET',
       headers: { 
         'Authorization': `Basic ${auth}`,
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'User-Agent': 'ResumeTheek-Verifier'
       }
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       return { 
         verified: false, 
-        error: data.error?.description || `Razorpay API error: ${response.status}` 
+        error: `Razorpay API returned ${response.status}: ${errorData.error?.description || 'Access Denied'}` 
       };
     }
 
-    // Accept both captured and authorized status
+    const data = await response.json();
+    
+    // Status 'authorized' is common before 'captured' in many payment flows
     const isValid = data.status === 'captured' || data.status === 'authorized';
+    
     return { 
       verified: isValid, 
-      error: isValid ? undefined : `Payment status is '${data.status}', expected 'captured' or 'authorized'.` 
+      error: isValid ? undefined : `Payment is in '${data.status}' state. Expected 'captured' or 'authorized'.` 
     };
-  } catch (e) {
-    return { verified: false, error: "Failed to connect to Razorpay verification service." };
+  } catch (e: any) {
+    return { 
+      verified: false, 
+      error: `Network Error: ${e.message || "Could not reach Razorpay servers."}` 
+    };
   }
 }
 
-export default async function handler(req: Request) {
-  const securityHeaders = {
-    'Content-Type': 'application/json',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY'
-  };
+export default async function handler(req: any, res: any) {
+  // Add security headers to the response
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
 
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: securityHeaders });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
   if (!keySecret || !keyId) {
-    return new Response(JSON.stringify({ error: 'Gateway keys are missing in the server environment configuration.' }), { status: 500, headers: securityHeaders });
+    return res.status(500).json({ error: 'Gateway keys are missing in the server environment.' });
   }
 
   try {
-    const payload = await req.json();
-    const { identifier, paymentId, orderId, signature, packageType } = payload;
+    const { identifier, paymentId, orderId, signature, packageType } = req.body;
     
     if (!identifier || !paymentId) {
-      return new Response(JSON.stringify({ error: 'Incomplete payment information received.' }), { status: 400, headers: securityHeaders });
+      return res.status(400).json({ error: 'Incomplete payment information received.' });
     }
 
     let isVerified = false;
     let verificationError = '';
 
-    // 1. Try HMAC Signature verification if pieces are present (Secure method)
+    // 1. Try HMAC Signature verification if pieces are present
     if (orderId && signature) {
-      isVerified = await verifyRazorpaySignature(orderId, paymentId, signature, keySecret);
-      if (!isVerified) verificationError = 'Signature mismatch.';
+      isVerified = await verifyRazorpaySignature(orderId, paymentId, signature, cleanKey(keySecret));
+      if (!isVerified) verificationError = 'Signature verification mismatch.';
     } 
     
-    // 2. Fallback: Verify via Razorpay API (Necessary for simple payments/test mode/missing signatures)
+    // 2. Fallback: Verify via direct Razorpay API call
     if (!isVerified) {
       const apiCheck = await verifyPaymentStatus(paymentId, keyId, keySecret);
       isVerified = apiCheck.verified;
@@ -116,22 +130,22 @@ export default async function handler(req: Request) {
     }
 
     if (!isVerified) {
-      return new Response(JSON.stringify({ 
+      return res.status(403).json({ 
         error: `Security Check Failed: ${verificationError}` 
-      }), { status: 403, headers: securityHeaders });
+      });
     }
 
     const secureId = await hashIdentifier(identifier);
     
-    // Set credits (3 attempts)
+    // Grant credits (3 attempts)
     await kv.set(`paid_v2_${secureId}`, {
       verifiedAt: new Date().toISOString(),
       credits: 3,
       packageType
     });
 
-    return new Response(JSON.stringify({ success: true }), { status: 200, headers: securityHeaders });
+    return res.status(200).json({ success: true });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "An unexpected error occurred during verification." }), { status: 500, headers: securityHeaders });
+    return res.status(500).json({ error: "An unexpected error occurred during the verification process." });
   }
 }

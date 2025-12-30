@@ -21,8 +21,9 @@ function checkOrigin(req: Request) {
   
   if (process.env.NODE_ENV === 'production' && origin && host) {
     try {
-      const originHost = new URL(origin).host;
-      if (originHost !== host) return false;
+      const originHost = new URL(origin).host.replace(/^www\./, '');
+      const cleanHost = host.replace(/^www\./, '');
+      if (originHost !== cleanHost) return false;
     } catch (e) {
       return false;
     }
@@ -56,6 +57,7 @@ async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: 
   const auth = btoa(`${keyId}:${keySecret}`);
   try {
     const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      method: 'GET',
       headers: { 'Authorization': `Basic ${auth}` }
     });
     if (!response.ok) return false;
@@ -75,13 +77,16 @@ export default async function handler(req: Request) {
   };
 
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
-  if (!checkOrigin(req)) return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: securityHeaders });
+  
+  if (!checkOrigin(req)) {
+    return new Response(JSON.stringify({ error: 'Security: Domain verification failed.' }), { status: 403, headers: securityHeaders });
+  }
 
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
   if (!keySecret || !keyId) {
-    return new Response(JSON.stringify({ error: 'Gateway configuration missing' }), { status: 500, headers: securityHeaders });
+    return new Response(JSON.stringify({ error: 'Gateway configuration missing on server.' }), { status: 500, headers: securityHeaders });
   }
 
   try {
@@ -89,7 +94,7 @@ export default async function handler(req: Request) {
     const { identifier, paymentId, orderId, signature, packageType } = payload;
     
     if (!identifier || !paymentId) {
-      return new Response(JSON.stringify({ error: 'Missing payment identifier' }), { status: 400, headers: securityHeaders });
+      return new Response(JSON.stringify({ error: 'Missing payment details.' }), { status: 400, headers: securityHeaders });
     }
 
     let isVerified = false;
@@ -105,7 +110,7 @@ export default async function handler(req: Request) {
     }
 
     if (!isVerified) {
-      return new Response(JSON.stringify({ error: 'Security verification failed' }), { status: 403, headers: securityHeaders });
+      return new Response(JSON.stringify({ error: 'Razorpay could not confirm this payment.' }), { status: 403, headers: securityHeaders });
     }
 
     const secureId = await hashIdentifier(identifier);
@@ -119,6 +124,6 @@ export default async function handler(req: Request) {
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: securityHeaders });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Internal verification error" }), { status: 500, headers: securityHeaders });
+    return new Response(JSON.stringify({ error: "Internal server error during verification." }), { status: 500, headers: securityHeaders });
   }
 }

@@ -1,3 +1,4 @@
+
 import { UserData, DocumentResult, PackageType, JobRole } from './types';
 import { generateJobDocuments } from './services/geminiService';
 import { PRICING, RAZORPAY_KEY_ID } from './constants';
@@ -229,21 +230,28 @@ const Builder = () => {
       description: `Unlock Full Documents - ${PRICING[selectedPackage].label}`,
       handler: async function(response: any) {
         if (response.razorpay_payment_id) {
-          const sync = await fetch('/api/verify', {
-            method: 'POST',
-            body: JSON.stringify({
-              identifier: currentId,
-              paymentId: response.razorpay_payment_id,
-              orderId: response.razorpay_order_id,
-              signature: response.razorpay_signature,
-              packageType: selectedPackage
-            })
-          });
-          
-          if (sync.ok) {
-            handlePaymentSuccess();
-          } else {
-            alert("Security check failed. Please contact support.");
+          try {
+            const sync = await fetch('/api/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                identifier: currentId,
+                paymentId: response.razorpay_payment_id,
+                orderId: response.razorpay_order_id,
+                signature: response.razorpay_signature,
+                packageType: selectedPackage
+              })
+            });
+            
+            const verifyResult = await sync.json();
+            
+            if (sync.ok) {
+              handlePaymentSuccess();
+            } else {
+              alert(verifyResult.error || "Security check failed. Please contact support.");
+            }
+          } catch (e) {
+            alert("Verification connection failed. Please check your internet.");
           }
         }
       },

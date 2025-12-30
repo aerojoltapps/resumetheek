@@ -16,9 +16,9 @@ async function hashIdentifier(id: string): Promise<string> {
 }
 
 async function verifyRazorpaySignature(orderId: string, paymentId: string, signature: string, secret: string): Promise<boolean> {
-  const text = orderId + "|" + paymentId;
+  const text = orderId.trim() + "|" + paymentId.trim();
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
+  const keyData = encoder.encode(secret.trim());
   const key = await crypto.subtle.importKey(
     "raw",
     keyData,
@@ -31,28 +31,45 @@ async function verifyRazorpaySignature(orderId: string, paymentId: string, signa
   const digest = Array.from(new Uint8Array(hmac))
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
-  return digest === signature;
+  return digest === signature.trim();
 }
 
 /**
  * Fallback: Verify payment by fetching status directly from Razorpay API
  */
-async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: string): Promise<boolean> {
-  const auth = btoa(`${keyId}:${keySecret}`);
+async function verifyPaymentStatus(paymentId: string, keyId: string, keySecret: string): Promise<{verified: boolean, error?: string}> {
   try {
-    const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+    const pid = paymentId.trim();
+    const kid = keyId.trim();
+    const ksec = keySecret.trim();
+    
+    const auth = btoa(kid + ":" + ksec);
+    
+    const response = await fetch(`https://api.razorpay.com/v1/payments/${pid}`, {
       method: 'GET',
       headers: { 
         'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
+        'Accept': 'application/json'
       }
     });
-    if (!response.ok) return false;
+
     const data = await response.json();
-    // Payment is valid if it is captured or authorized
-    return data.status === 'captured' || data.status === 'authorized';
+
+    if (!response.ok) {
+      return { 
+        verified: false, 
+        error: data.error?.description || `Razorpay API error: ${response.status}` 
+      };
+    }
+
+    // Accept both captured and authorized status
+    const isValid = data.status === 'captured' || data.status === 'authorized';
+    return { 
+      verified: isValid, 
+      error: isValid ? undefined : `Payment status is '${data.status}', expected 'captured' or 'authorized'.` 
+    };
   } catch (e) {
-    return false;
+    return { verified: false, error: "Failed to connect to Razorpay verification service." };
   }
 }
 
@@ -71,7 +88,7 @@ export default async function handler(req: Request) {
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
   if (!keySecret || !keyId) {
-    return new Response(JSON.stringify({ error: 'Gateway keys missing in server environment.' }), { status: 500, headers: securityHeaders });
+    return new Response(JSON.stringify({ error: 'Gateway keys are missing in the server environment configuration.' }), { status: 500, headers: securityHeaders });
   }
 
   try {
@@ -79,23 +96,29 @@ export default async function handler(req: Request) {
     const { identifier, paymentId, orderId, signature, packageType } = payload;
     
     if (!identifier || !paymentId) {
-      return new Response(JSON.stringify({ error: 'Missing payment metadata from client.' }), { status: 400, headers: securityHeaders });
+      return new Response(JSON.stringify({ error: 'Incomplete payment information received.' }), { status: 400, headers: securityHeaders });
     }
 
     let isVerified = false;
+    let verificationError = '';
 
     // 1. Try HMAC Signature verification if pieces are present (Secure method)
     if (orderId && signature) {
       isVerified = await verifyRazorpaySignature(orderId, paymentId, signature, keySecret);
+      if (!isVerified) verificationError = 'Signature mismatch.';
     } 
     
-    // 2. Fallback: Verify via Razorpay API (Necessary for simple payments/test mode)
+    // 2. Fallback: Verify via Razorpay API (Necessary for simple payments/test mode/missing signatures)
     if (!isVerified) {
-      isVerified = await verifyPaymentStatus(paymentId, keyId, keySecret);
+      const apiCheck = await verifyPaymentStatus(paymentId, keyId, keySecret);
+      isVerified = apiCheck.verified;
+      if (!isVerified) verificationError = apiCheck.error || 'Razorpay API verification failed.';
     }
 
     if (!isVerified) {
-      return new Response(JSON.stringify({ error: 'Verification Failed: Razorpay did not recognize this payment ID.' }), { status: 403, headers: securityHeaders });
+      return new Response(JSON.stringify({ 
+        error: `Security Check Failed: ${verificationError}` 
+      }), { status: 403, headers: securityHeaders });
     }
 
     const secureId = await hashIdentifier(identifier);
@@ -109,6 +132,6 @@ export default async function handler(req: Request) {
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: securityHeaders });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Internal processing error during verification." }), { status: 500, headers: securityHeaders });
+    return new Response(JSON.stringify({ error: "An unexpected error occurred during verification." }), { status: 500, headers: securityHeaders });
   }
 }

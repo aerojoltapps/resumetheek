@@ -134,7 +134,7 @@ const Builder = () => {
   const [searchParams] = useSearchParams();
   
   // Storage Keys
-  const ID_KEY = btoa('rt_v1_paid_ids');
+  const PAID_PKGS_KEY = btoa('rt_v2_paid_packages');
   const CREDITS_KEY = btoa('rt_v1_credits_log');
 
   const getIdentifier = (email: string, phone: string) => `${email.toLowerCase().trim()}_${phone.trim()}`;
@@ -147,14 +147,14 @@ const Builder = () => {
 
     try {
       const draftStr = localStorage.getItem('rt_draft');
-      const paidIdsStr = localStorage.getItem(ID_KEY);
-      if (draftStr && paidIdsStr) {
+      const paidPkgsStr = localStorage.getItem(PAID_PKGS_KEY);
+      if (draftStr && paidPkgsStr) {
         const draft = JSON.parse(draftStr);
-        const paidIds = JSON.parse(paidIdsStr);
+        const paidPkgs = JSON.parse(paidPkgsStr);
         if (draft.email && draft.phone) {
           const id = `${draft.email.toLowerCase().trim()}_${draft.phone.trim()}`;
-          if (paidIds.includes(id)) {
-            return PackageType.JOB_READY_PACK; // Bypass to form for returning paid users
+          if (paidPkgs[id]) {
+            return paidPkgs[id]; // Bypass to form using the ACTUAL package they paid for
           }
         }
       }
@@ -178,15 +178,19 @@ const Builder = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCheckout, setIsCheckout] = useState(false);
 
-  const [paidIdentifiers, setPaidIdentifiers] = useState<string[]>(() => 
-    JSON.parse(localStorage.getItem(ID_KEY) || '[]')
+  // Map of Identifier -> PackageType
+  const [paidPackages, setPaidPackages] = useState<Record<string, PackageType>>(() => 
+    JSON.parse(localStorage.getItem(PAID_PKGS_KEY) || '{}')
   );
+  
   const [creditsMap, setCreditsMap] = useState<Record<string, number>>(() => 
     JSON.parse(localStorage.getItem(CREDITS_KEY) || '{}')
   );
 
   const currentId = userData ? getIdentifier(userData.email, userData.phone) : '';
-  const isPaid = paidIdentifiers.includes(currentId);
+  
+  // A user is "Paid" only if the currently selected package matches the one they paid for
+  const isPaid = paidPackages[currentId] === selectedPackage;
   const remainingCredits = creditsMap[currentId] !== undefined ? creditsMap[currentId] : 0;
 
   useEffect(() => {
@@ -194,8 +198,8 @@ const Builder = () => {
   }, [userData]);
 
   useEffect(() => {
-    localStorage.setItem(ID_KEY, JSON.stringify(paidIdentifiers));
-  }, [paidIdentifiers]);
+    localStorage.setItem(PAID_PKGS_KEY, JSON.stringify(paidPackages));
+  }, [paidPackages]);
 
   useEffect(() => {
     localStorage.setItem(CREDITS_KEY, JSON.stringify(creditsMap));
@@ -204,6 +208,13 @@ const Builder = () => {
   const onFormSubmit = async (data: UserData) => {
     const id = getIdentifier(data.email, data.phone);
     setUserData(data);
+
+    // If they changed package type in UI but haven't paid for it specifically, trigger checkout
+    if (paidPackages[id] !== selectedPackage) {
+      setIsCheckout(true);
+      return;
+    }
+
     setIsGenerating(true);
     setResult(null);
 
@@ -211,7 +222,6 @@ const Builder = () => {
       const generated = await generateJobDocuments(data, id);
       setResult(generated);
       
-      setPaidIdentifiers(prev => prev.includes(id) ? prev : [...prev, id]);
       if (generated.remainingCredits !== undefined) {
         setCreditsMap(prev => ({
           ...prev,
@@ -274,7 +284,7 @@ const Builder = () => {
             }
             
             if (syncResponse.ok) {
-              handlePaymentSuccess();
+              handlePaymentSuccess(selectedPackage);
             } else {
               alert(verifyResult.error || "Payment verification failed. Please try refreshing.");
             }
@@ -295,10 +305,10 @@ const Builder = () => {
     instance.open();
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = (pkg: PackageType) => {
     if (userData) {
       const id = getIdentifier(userData.email, userData.phone);
-      setPaidIdentifiers(prev => prev.includes(id) ? prev : [...prev, id]);
+      setPaidPackages(prev => ({ ...prev, [id]: pkg }));
       setCreditsMap(prev => ({ ...prev, [id]: 3 }));
       setIsCheckout(false);
       onFormSubmit(userData);
